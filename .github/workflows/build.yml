@@ -1,0 +1,266 @@
+name: Build HOMEd Web for multiple architectures
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+    inputs:
+      architecture:
+        description: 'Архитектура для сборки'
+        required: true
+        default: 'All'
+        type: choice
+        options:
+          - 'All'
+          - 'linux-amd64'
+          - 'linux-aarch64'
+          - 'linux-armhf'
+          - 'openwrt-aarch64_generic'
+          - 'openwrt-arm_cortex-a7_neon-vfpv4'
+          - 'openwrt-arm_cortex-a9_neon'
+          - 'openwrt-mips_24kc'
+          - 'openwrt-mipsel_24kc'
+          - 'entware-aarch64'
+          - 'entware-mips'
+          - 'entware-mipsel'
+
+jobs:
+  build:
+    name: build (${{ matrix.target.name }})
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          # Linux native architectures
+          - name: linux-amd64
+            arch: amd64-linux
+            qt_archive: qt-amd64-linux-5.15.4-shared.tar.xz
+            gcc_archive: null
+            
+          - name: linux-aarch64
+            arch: aarch64-linux-gnu
+            qt_archive: qt-aarch64-linux-gnu-5.15.4-shared.tar.xz
+            gcc_archive: null
+            
+          - name: linux-armhf
+            arch: arm-linux-gnueabihf
+            qt_archive: qt-arm-linux-gnueabihf-5.15.4-share.tar.xz
+            gcc_archive: null
+
+          # OpenWRT architectures
+          - name: openwrt-aarch64_generic
+            arch: aarch64_generic-openwrt-linux
+            qt_archive: qt-aarch64_generic-openwrt-linux-5.15.4-shared.tar.xz
+            gcc_archive: gcc-aarch64_generic-openwrt-linux.tar.xz
+            
+          - name: openwrt-arm_cortex-a7_neon-vfpv4
+            arch: arm_cortex-a7_neon-vfpv4-openwrt-linux
+            qt_archive: qt-arm_cortex-a7_neon-vfpv4-openwrt-linux-5.15.4-shared.tar.xz
+            gcc_archive: gcc-arm_cortex-a7_neon-vfpv4-openwrt-linux.tar.xz
+            
+          - name: openwrt-arm_cortex-a9_neon
+            arch: arm_cortex-a9_neon-openwrt-linux
+            qt_archive: qt-arm_cortex-a9_neon-openwrt-linux-5.15.4-shared.tar.xz
+            gcc_archive: gcc-arm_cortex-a9_neon-openwrt-linux.tar.xz
+            
+          - name: openwrt-mips_24kc
+            arch: mips_24kc-openwrt-linux
+            qt_archive: qt-mips_24kc-openwrt-linux-5.15.4-shared.tar.xz
+            gcc_archive: gcc-mips_24kc-openwrt-linux.tar.xz
+            
+          - name: openwrt-mipsel_24kc
+            arch: mipsel_24kc-openwrt-linux
+            qt_archive: qt-mipsel_24kc-openwrt-linux-5.15.4-shared.tar.xz
+            gcc_archive: gcc-mipsel_24kc-openwrt-linux.tar.xz
+
+          # Entware architectures
+          - name: entware-aarch64
+            arch: aarch64-openwrt-linux-gnu
+            qt_archive: qt-aarch64-openwrt-linux-gnu-5.15.4-shared.tar.xz
+            gcc_archive: gcc-aarch64-openwrt-linux-gnu.tar.xz
+            
+          - name: entware-mips
+            arch: mips-openwrt-linux-gnu
+            qt_archive: qt-mips-openwrt-linux-gnu-5.15.4-shared.tar.xz
+            gcc_archive: gcc-mips-openwrt-linux-gnu.tar.xz
+            
+          - name: entware-mipsel
+            arch: mipsel-openwrt-linux-gnu
+            qt_archive: qt-mipsel-openwrt-linux-gnu-5.15.4-shared.tar.xz
+            gcc_archive: gcc-mipsel-openwrt-linux-gnu.tar.xz
+
+    env:
+      ARCH: ${{ matrix.target.arch }}
+      QT_BASE_URL: https://sandbox.u236.org/toolchain/qt/
+      GCC_BASE_URL: https://sandbox.u236.org/toolchain/gcc/
+      QT_DIR: ${{ github.workspace }}/qt/${{ matrix.target.arch }}
+      GCC_DIR: ${{ github.workspace }}/gcc/${{ matrix.target.arch }}
+
+    steps:
+      # Фильтр для выбора архитектуры при ручном запуске
+      - name: Check target architecture
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && \
+             [ "${{ github.event.inputs.architecture }}" != "All" ] && \
+             [ "${{ github.event.inputs.architecture }}" != "${{ matrix.target.name }}" ]; then
+            echo "✅ Skipping this architecture per user selection"
+            echo "SKIP_BUILD=true" >> $GITHUB_ENV
+          else
+            echo "SKIP_BUILD=false" >> $GITHUB_ENV
+          fi
+
+      - name: Prepare system packages
+        if: env.SKIP_BUILD != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            wget \
+            xz-utils \
+            libgl1-mesa-dev \
+            libssl-dev
+
+      - name: Cache Qt archives
+        if: env.SKIP_BUILD != 'true'
+        id: cache-qt
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/qt_cache
+          key: qt-${{ matrix.target.qt_archive }}
+          restore-keys: |
+            qt-${{ matrix.target.qt_archive }}
+
+      - name: Cache GCC archives
+        if: env.SKIP_BUILD != 'true' && matrix.target.gcc_archive != null
+        id: cache-gcc
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/gcc_cache
+          key: gcc-${{ matrix.target.gcc_archive }}
+          restore-keys: |
+            gcc-${{ matrix.target.gcc_archive }}
+
+      - name: Download Qt
+        if: env.SKIP_BUILD != 'true'
+        run: |
+          mkdir -p qt_cache
+          cd qt_cache
+          if [ ! -f "${{ matrix.target.qt_archive }}" ]; then
+            wget -q --show-progress "${QT_BASE_URL}${{ matrix.target.qt_archive }}"
+          fi
+
+      - name: Download GCC toolchain
+        if: env.SKIP_BUILD != 'true' && matrix.target.gcc_archive != null
+        run: |
+          mkdir -p gcc_cache
+          cd gcc_cache
+          if [ ! -f "${{ matrix.target.gcc_archive }}" ]; then
+            wget -q --show-progress "${GCC_BASE_URL}${{ matrix.target.gcc_archive }}"
+          fi
+
+      - name: Extract Qt
+        if: env.SKIP_BUILD != 'true'
+        run: |
+          mkdir -p "${QT_DIR}"
+          tar -xf "qt_cache/${{ matrix.target.qt_archive }}" -C "${QT_DIR}" --strip-components=1
+
+      - name: Extract GCC toolchain
+        if: env.SKIP_BUILD != 'true' && matrix.target.gcc_archive != null
+        run: |
+          mkdir -p "${GCC_DIR}"
+          tar -xf "gcc_cache/${{ matrix.target.gcc_archive }}" -C "${GCC_DIR}" --strip-components=1
+
+      - name: Checkout homed-service-common
+        if: env.SKIP_BUILD != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: u236/homed-service-common
+          path: homed/homed-common
+
+      - name: Checkout homed-service-web
+        if: env.SKIP_BUILD != 'true'
+        uses: actions/checkout@v4
+        with:
+          path: homed/homed-web
+
+      - name: Build project
+        if: env.SKIP_BUILD != 'true'
+        run: |
+          export PATH="${QT_DIR}/bin:${GCC_DIR}/bin:${PATH}"
+          export QTDIR="${QT_DIR}"
+
+          cd homed/homed-web
+          "${QT_DIR}/bin/qmake" homed-web.pro -r CONFIG+=release
+          make -j$(nproc)
+
+      - name: Prepare artifact
+        if: env.SKIP_BUILD != 'true'
+        run: |
+          mkdir -p artifact
+          cp homed/homed-web/homed-web artifact/
+          strip artifact/homed-web || true
+
+      - name: Upload artifact
+        if: env.SKIP_BUILD != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: homed-web-${{ matrix.target.name }}
+          path: artifact/
+          compression-level: 9
+          retention-days: 90
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create archives for release
+        run: |
+          mkdir -p release
+          cd artifacts
+          for dir in */; do
+            name="${dir%/}"
+            cd "$dir"
+            tar -czf "../../release/${name}.tar.gz" .
+            cd ..
+          done
+
+      - name: Generate release notes
+        run: |
+          cat > release/RELEASE_NOTES.md << 'EOF'
+          # HOMEd Web Builds
+          
+          Автоматическая сборка для всех поддерживаемых архитектур.
+          
+          | Архитектура | Файл |
+          |-------------|------|
+          EOF
+          
+          cd release
+          for file in *.tar.gz; do
+            size=$(du -h "$file" | cut -f1)
+            name="${file%.tar.gz}"
+            echo "| $name | $file ($size) |" >> RELEASE_NOTES.md
+          done
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Build ${{ github.sha }}
+          tag_name: build-${{ github.run_number }}
+          body_path: release/RELEASE_NOTES.md
+          files: release/*.tar.gz
+          generate_release_notes: true
