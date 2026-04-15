@@ -55,27 +55,27 @@ jobs:
           - name: openwrt-aarch64_generic
             arch: aarch64_generic-openwrt-linux
             qt_archive: qt-aarch64_generic-openwrt-linux-5.15.4-shared.tar.xz
-            gcc_archive: gcc-aarch64_generic-openwrt-linux.tar.xz
+            gcc_archive: gcc-aarch64_generic-openwrt-linux-8.4.0-musl.tar.xz
             
           - name: openwrt-arm_cortex-a7_neon-vfpv4
             arch: arm_cortex-a7_neon-vfpv4-openwrt-linux
             qt_archive: qt-arm_cortex-a7_neon-vfpv4-openwrt-linux-5.15.4-shared.tar.xz
-            gcc_archive: gcc-arm_cortex-a7_neon-vfpv4-openwrt-linux.tar.xz
+            gcc_archive: gcc-arm_cortex-a7_neon-vfpv4-openwrt-linux-8.4.0-musl.tar.xz
             
           - name: openwrt-arm_cortex-a9_neon
             arch: arm_cortex-a9_neon-openwrt-linux
             qt_archive: qt-arm_cortex-a9_neon-openwrt-linux-5.15.4-shared.tar.xz
-            gcc_archive: gcc-arm_cortex-a9_neon-openwrt-linux.tar.xz
+            gcc_archive: gcc-arm_cortex-a9_neon-openwrt-linux-8.4.0-musl.tar.xz
             
           - name: openwrt-mips_24kc
             arch: mips_24kc-openwrt-linux
             qt_archive: qt-mips_24kc-openwrt-linux-5.15.4-shared.tar.xz
-            gcc_archive: gcc-mips_24kc-openwrt-linux.tar.xz
+            gcc_archive: gcc-mips_24kc-openwrt-linux-8.4.0-musl.tar.xz
             
           - name: openwrt-mipsel_24kc
             arch: mipsel_24kc-openwrt-linux
             qt_archive: qt-mipsel_24kc-openwrt-linux-5.15.4-shared.tar.xz
-            gcc_archive: gcc-mipsel_24kc-openwrt-linux.tar.xz
+            gcc_archive: gcc-mipsel_24kc-openwrt-linux-8.4.0-musl.tar.xz
 
           # Entware architectures
           - name: entware-aarch64
